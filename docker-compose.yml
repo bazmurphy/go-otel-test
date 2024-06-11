@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile.server
     container_name: server1
-    command: -port=8081 -next=server2:8082
+    command: -port=8081 -forward=server2:8082
     ports:
       - 8081:8081
 
@@ -13,7 +13,7 @@ services:
       context: .
       dockerfile: Dockerfile.server
     container_name: server2
-    command: -port=8082 -next=server3:8083
+    command: -port=8082 -forward=server3:8083
     ports:
       - 8082:8082
 
