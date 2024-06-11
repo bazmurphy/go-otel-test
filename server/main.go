@@ -17,8 +17,8 @@ import (
 )
 
 var (
-	port       = flag.Int("port", 0, "the grpc server port")
-	nextServer = flag.String("next", "", "the address of the next grpc server")
+	port          = flag.Int("port", 0, "the grpc server port")
+	forwardServer = flag.String("forward", "", "the address of the next grpc server")
 )
 
 func main() {
@@ -32,7 +32,7 @@ func main() {
 	grpcServer := grpc.NewServer()
 
 	myServiceServer := &MyServiceServer{
-		nextServer: *nextServer,
+		forwardServer: *forwardServer,
 	}
 
 	pb.RegisterMyServiceServer(grpcServer, myServiceServer)
@@ -47,7 +47,7 @@ func main() {
 
 type MyServiceServer struct {
 	pb.UnimplementedMyServiceServer
-	nextServer string
+	forwardServer string
 }
 
 func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.MyServiceRequest) (*pb.MyServiceResponse, error) {
@@ -63,8 +63,8 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 	dataAfter := request.DataBefore + 50
 
 	// forward request to the next server
-	if s.nextServer != "" {
-		connection, err := grpc.NewClient(s.nextServer, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if s.forwardServer != "" {
+		connection, err := grpc.NewClient(s.forwardServer, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			log.Fatalf("grpc client could not connect to the grpc server: %v", err)
 		}
@@ -76,11 +76,11 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 		defer cancel()
 
 		request.Source = source
-		request.Destination = s.nextServer
+		request.Destination = s.forwardServer
 		request.DataBefore = dataAfter
 		log.Println("DEBUG | request:", request)
 
-		log.Printf("🟨 forwarding request to: %s", *nextServer)
+		log.Printf("🟨 forwarding request to: %s", *forwardServer)
 
 		response, err := client.MyServiceProcessData(ctx, request)
 		if err != nil {
