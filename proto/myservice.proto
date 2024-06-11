@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package myservice;
+
+option go_package = "./proto";
+
+service MyService {
+  rpc MyServiceProcessData (MyServiceRequest) returns (MyServiceResponse) {}
+}
+
+message MyServiceRequest {
+  string source = 1;
+  string destination = 2;
+  int64 data_before = 3;
+}
+
+message MyServiceResponse {
+  string source = 1;
+  string destination = 2;
+  int64 data_after = 3;
+}

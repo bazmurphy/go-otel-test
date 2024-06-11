@@ -1,0 +1,25 @@
+FROM golang:latest as builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+
+RUN go mod download
+
+COPY . .
+
+RUN go build -o bin/server server/main.go
+
+FROM alpine:latest
+
+WORKDIR /app
+
+COPY --from=builder /app/bin/server /app/server
+
+RUN pwd
+
+RUN ls -la
+
+RUN chmod +x /app/server
+
+ENTRYPOINT [ "/app/server" ]
