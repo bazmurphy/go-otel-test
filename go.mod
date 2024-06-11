@@ -1,4 +1,4 @@
-module github.com/bazmurphy/go-otel-fun
+module github.com/bazmurphy/go-otel-test
 
 go 1.22.0
 
