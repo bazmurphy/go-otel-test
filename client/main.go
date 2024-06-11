@@ -78,7 +78,7 @@ func main() {
 	connection, err := grpc.NewClient(
 		*destination,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithStatsHandler(otelgrpc.NewClientHandler()), // (!) for otel
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()), // (!) for otel,
 	)
 	if err != nil {
 		log.Fatalf("grpc client could not connect to the grpc server: %v", err)
