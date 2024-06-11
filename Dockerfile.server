@@ -1,4 +1,4 @@
-FROM golang:latest as builder
+FROM golang:latest
 
 WORKDIR /app
 
@@ -10,16 +10,4 @@ COPY . .
 
 RUN go build -o bin/server server/main.go
 
-FROM alpine:latest
-
-WORKDIR /app
-
-COPY --from=builder /app/bin/server /app/server
-
-RUN pwd
-
-RUN ls -la
-
-RUN chmod +x /app/server
-
-ENTRYPOINT [ "/app/server" ]
+ENTRYPOINT [ "./bin/server" ]
