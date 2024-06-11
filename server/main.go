@@ -61,7 +61,7 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 	log.Println("🟪 Server | MyServiceProcessData | received request...")
 
 	// (!) actually the context carries the request information including source/destination
-	log.Println("DEBUG | Server | ctx:", ctx)
+	// log.Println("DEBUG | Server | ctx:", ctx)
 
 	valueToAdd := rand.Intn(50)
 
