@@ -49,7 +49,7 @@ func main() {
 		}
 		log.Println("⬜ Client | request:", request)
 
-		log.Printf("🟦 Client | making request to: %s", *destination)
+		log.Printf("🟦 Client | sending request to: %s", *destination)
 
 		start := time.Now()
 
