@@ -25,7 +25,7 @@ func main() {
 		log.Fatalf("'destination' flag required")
 	}
 
-	log.Println("⬜ Client | clientIP:", clientIP)
+	log.Println("⬜ Client | IP:", clientIP)
 
 	connection, err := grpc.NewClient(*destination, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -45,7 +45,7 @@ func main() {
 			Origin:      clientIP,
 			Source:      clientIP,
 			Destination: *destination,
-			DataBefore:  100,
+			Data:        100,
 		}
 		log.Println("⬜ Client | request:", request)
 

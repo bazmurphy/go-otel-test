@@ -44,7 +44,7 @@ func main() {
 
 	source := util.GetIPv4Address()
 
-	log.Printf("🤖 Server | IP %s Port %v", source, *portFlag)
+	log.Printf("🤖 Server | IP: %s Port: %v", source, *portFlag)
 
 	err = grpcServer.Serve(listener)
 	if err != nil {
@@ -66,7 +66,7 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 	valueToAdd := rand.Intn(50)
 
 	// increment the value of data (to emulate some work)
-	dataAfter := request.DataBefore + int64(valueToAdd)
+	dataAfter := request.Data + int64(valueToAdd)
 
 	// add a delay (to emulate that work taking time)
 	delay := time.Duration(rand.Intn(500)) * time.Millisecond
@@ -88,7 +88,7 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 
 		request.Source = serverIP
 		request.Destination = s.forwardServer
-		request.DataBefore = dataAfter
+		request.Data = dataAfter
 		log.Println("⬜ Server | request:", request)
 
 		log.Printf("🟨 Server | forwarding request to: %s", *forwardServerFlag)
@@ -107,7 +107,7 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 		Origin:      request.Origin,
 		Source:      serverIP,
 		Destination: request.Origin,
-		DataAfter:   dataAfter,
+		Data:        dataAfter,
 	}
 	log.Println("⬜ Server | response:", response)
 
