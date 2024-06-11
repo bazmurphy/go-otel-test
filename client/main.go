@@ -104,7 +104,7 @@ func main() {
 		Origin:      clientIP,
 		Source:      clientIP,
 		Destination: *destination,
-		Data:        100,
+		Data:        0,
 	}
 	log.Println("⬜ Client | request:", request)
 
