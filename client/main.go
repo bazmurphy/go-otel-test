@@ -15,10 +15,17 @@ import (
 
 var (
 	destination = flag.String("destination", "", "the address of the grpc server to connect to")
+	clientIP    = util.GetIPv4Address()
 )
 
 func main() {
 	flag.Parse()
+
+	if *destination == "" {
+		log.Fatalf("--destination flag required")
+	}
+
+	log.Println("⬜ Client | clientIP:", clientIP)
 
 	connection, err := grpc.NewClient(*destination, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -31,16 +38,13 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	clientIP := util.GetIPv4Address()
-	log.Println("ℹ️ Client | clientIP:", clientIP)
-
 	request := &pb.MyServiceRequest{
 		Origin:      clientIP,
 		Source:      clientIP,
 		Destination: *destination,
 		DataBefore:  100,
 	}
-	log.Println("ℹ️ Client | request:", request)
+	log.Println("⬜ Client | request:", request)
 
 	log.Printf("🟦 Client | making request to: %s", *destination)
 

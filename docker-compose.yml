@@ -16,6 +16,8 @@ services:
     command: -port=8082 -forward=server3:8083
     ports:
       - 8082:8082
+    depends_on: 
+      - server1
 
   server3:
     build: 
@@ -25,6 +27,9 @@ services:
     command: -port=8083 -forward=server4:8084
     ports:
       - 8083:8083
+    depends_on: 
+      - server1
+      - server2
 
   server4:
     build: 
@@ -34,6 +39,10 @@ services:
     command: -port=8084
     ports:
       - 8084:8084
+    depends_on: 
+      - server1
+      - server2
+      - server3
   
   client:
     build: 

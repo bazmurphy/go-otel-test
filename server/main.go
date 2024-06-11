@@ -25,6 +25,10 @@ var (
 func main() {
 	flag.Parse()
 
+	if *portFlag == 0 {
+		log.Fatalf("'port' flag required")
+	}
+
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", *portFlag))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
@@ -40,7 +44,7 @@ func main() {
 
 	source := util.GetIPv4Address()
 
-	log.Printf("🤖 MyServiceServer %s %v", source, listener.Addr())
+	log.Printf("🤖 Server | IP %s Port %v", source, *portFlag)
 
 	err = grpcServer.Serve(listener)
 	if err != nil {
@@ -54,17 +58,22 @@ type MyServiceServer struct {
 }
 
 func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.MyServiceRequest) (*pb.MyServiceResponse, error) {
-	log.Println("🟪 Server | MyServiceProcessData received request...")
-	// log.Println("DEBUG | ctx:", ctx)
+	log.Println("🟪 Server | MyServiceProcessData | received request...")
 
+	// (!) actually the context carries the request information including source/destination
+	log.Println("DEBUG | Server | ctx:", ctx)
+
+	valueToAdd := rand.Intn(50)
+
+	// increment the value of data (to emulate some work)
+	dataAfter := request.DataBefore + int64(valueToAdd)
+
+	// add a delay (to emulate that work taking time)
 	delay := time.Duration(rand.Intn(500)) * time.Millisecond
-	log.Printf("⏳ Server | artificially waiting %v...", delay)
+	log.Printf("⏳ Server | emulating work, artificially waiting %v...", delay)
 	time.Sleep(delay)
 
-	destination := request.Source
-	dataAfter := request.DataBefore + 50
-
-	// forward request to the next server
+	// if there is a forward server, then forward request to the next server
 	if s.forwardServer != "" {
 		connection, err := grpc.NewClient(s.forwardServer, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
@@ -80,7 +89,7 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 		request.Source = serverIP
 		request.Destination = s.forwardServer
 		request.DataBefore = dataAfter
-		log.Println("ℹ️ Server | request:", request)
+		log.Println("⬜ Server | request:", request)
 
 		log.Printf("🟨 Server | forwarding request to: %s", *forwardServerFlag)
 
@@ -93,14 +102,15 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 		return response, nil
 	}
 
+	// otherwise respond to the origin caller
 	response := &pb.MyServiceResponse{
 		Origin:      request.Origin,
 		Source:      serverIP,
-		Destination: destination,
+		Destination: request.Origin,
 		DataAfter:   dataAfter,
 	}
-	log.Println("ℹ️ Server | response:", response)
+	log.Println("⬜ Server | response:", response)
 
-	log.Println("🟦 Server | MyServiceProcessData sending response...")
+	log.Println("🟦 Server | MyServiceProcessData | sending response...")
 	return response, nil
 }
