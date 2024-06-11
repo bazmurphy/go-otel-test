@@ -16,8 +16,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/bazmurphy/go-otel-fun/proto"
-	"github.com/bazmurphy/go-otel-fun/util"
+	pb "github.com/bazmurphy/go-otel-test/proto"
+	"github.com/bazmurphy/go-otel-test/util"
 )
 
 var (
@@ -90,13 +90,12 @@ func main() {
 	// set the tracer
 	tracer := tracerProvider.Tracer("client")
 
-	ctx, span := tracer.Start(context.Background(), "client-request")
-	// defer span.End()
+	ctx, span := tracer.Start(context.Background(), "client-span-test")
+	defer span.End()
 	// log.Printf("🔍 Client | span : %v", span)
 
 	spanContext := trace.SpanContextFromContext(ctx)
 	// log.Printf("🔍 Client | spanContext : %v", spanContext)
-
 	traceID := spanContext.TraceID().String()
 	spanID := spanContext.SpanID().String()
 	log.Printf("🔍 Client | Trace ID: %s Span ID: %s", traceID, spanID)
@@ -123,7 +122,4 @@ func main() {
 
 	log.Println("🟩 Client | received response:", response)
 	log.Printf("🟩 Client | total duration: %v", duration)
-
-	// complete the span
-	span.End()
 }

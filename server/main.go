@@ -19,8 +19,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/bazmurphy/go-otel-fun/proto"
-	"github.com/bazmurphy/go-otel-fun/util"
+	pb "github.com/bazmurphy/go-otel-test/proto"
+	"github.com/bazmurphy/go-otel-test/util"
 )
 
 var (
@@ -113,26 +113,26 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 	log.Println("🟪 Server | received request...")
 
 	// (!) actually the context carries the request information including source/destination
-	log.Println("DEBUG | Server | ctx:", ctx)
+	// log.Println("DEBUG | Server | ctx:", ctx)
 	// DEBUG | Server | ctx: context.Background.WithValue(type transport.connectionKey, val <not Stringer>).WithValue(type peer.peerKey, val Peer{Addr: '192.168.32.7:54688', LocalAddr: '192.168.32.2:8081', AuthInfo: <nil>}).WithCancel.WithValue(type metadata.mdIncomingKey, val MD{:authority=[server1:8081], content-type=[application/grpc], user-agent=[grpc-go/1.64.0], grpc-accept-encoding=[gzip]}).WithValue(type grpc.serverKey, val <not Stringer>).WithValue(type trace.traceContextKeyType, val <not Stringer>).WithValue(type trace.traceContextKeyType, val <not Stringer>).WithValue(type otelgrpc.gRPCContextKey, val <not Stringer>).WithValue(type grpc.streamKey, val <not Stringer>)
 
 	// span := trace.SpanFromContext(ctx)
 	// log.Printf("🔍 Server | span : %v", span)
-
 	spanContext := trace.SpanContextFromContext(ctx)
 	// log.Printf("🔍 Server | spanContext : %v", spanContext)
-
 	traceID := spanContext.TraceID().String()
 	spanID := spanContext.SpanID().String()
 	log.Printf("🔍 Server | Trace ID: %s Span ID: %s", traceID, spanID)
 
-	// create a new child span ???
-	// tracer := otel.Tracer("server")
-	// ctx, span := tracer.Start(trace.ContextWithSpanContext(ctx, spanContext), "server-process")
-	// defer span.End()
+	// (!) HELP....
+	// how to make a child span?
+	// do we even need to? why can't it auto follow through the request path...
 
-	// ctx = trace.ContextWithSpanContext(context.Background(), spanContext)
-	// ctx = trace.ContextWithSpanContext(ctx, spanContext)
+	tracer := otel.Tracer("server")
+
+	// (!) if the context.Context provided in `ctx` contains a Span then the newly-created Span will be a child of that span
+	ctx, childSpan := tracer.Start(ctx, "server-span-test")
+	defer childSpan.End()
 
 	valueToAdd := rand.Intn(50)
 	// increment the value of data (to emulate some work)

@@ -1,3 +1,8 @@
 # Distributed Tracing
 
-## Go and gRPC and Open Telemetry and Jaegar
+Trace a single client request that traverses through 4 servers and back
+
+`go` `grpc` `otel` `jaegar`
+
+1. `docker compose up`
+2. visit http://localhost:16686
