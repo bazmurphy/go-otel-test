@@ -31,16 +31,18 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	source := util.GetIPv4Address()
+	clientIP := util.GetIPv4Address()
+	log.Println("ℹ️ Client | clientIP:", clientIP)
 
 	request := &pb.MyServiceRequest{
-		Source:      source,
+		Origin:      clientIP,
+		Source:      clientIP,
 		Destination: *destination,
 		DataBefore:  100,
 	}
-	log.Println("DEBUG | request:", request)
+	log.Println("ℹ️ Client | request:", request)
 
-	log.Printf("🟧 client making request to: %s", *destination)
+	log.Printf("🟦 Client | making request to: %s", *destination)
 
 	start := time.Now()
 
@@ -52,6 +54,6 @@ func main() {
 	end := time.Now()
 	duration := end.Sub(start)
 
-	log.Println("🟩 client received response:", response)
-	log.Printf("duration: %v", duration)
+	log.Println("🟩 Client | received response:", response)
+	log.Printf("🟩 Client | total duration: %v", duration)
 }

@@ -17,14 +17,15 @@ import (
 )
 
 var (
-	port          = flag.Int("port", 0, "the grpc server port")
-	forwardServer = flag.String("forward", "", "the address of the next grpc server")
+	portFlag          = flag.Int("port", 0, "the grpc server port")
+	forwardServerFlag = flag.String("forward", "", "the address of the next grpc server")
+	serverIP          = util.GetIPv4Address()
 )
 
 func main() {
 	flag.Parse()
 
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", *portFlag))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -32,12 +33,14 @@ func main() {
 	grpcServer := grpc.NewServer()
 
 	myServiceServer := &MyServiceServer{
-		forwardServer: *forwardServer,
+		forwardServer: *forwardServerFlag,
 	}
 
 	pb.RegisterMyServiceServer(grpcServer, myServiceServer)
 
-	log.Printf("🤖 MyServiceServer listening on %v", listener.Addr())
+	source := util.GetIPv4Address()
+
+	log.Printf("🤖 MyServiceServer %s %v", source, listener.Addr())
 
 	err = grpcServer.Serve(listener)
 	if err != nil {
@@ -51,14 +54,13 @@ type MyServiceServer struct {
 }
 
 func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.MyServiceRequest) (*pb.MyServiceResponse, error) {
-	log.Println("🟪 MyServiceProcessData received request")
+	log.Println("🟪 Server | MyServiceProcessData received request...")
 	// log.Println("DEBUG | ctx:", ctx)
 
 	delay := time.Duration(rand.Intn(500)) * time.Millisecond
-	log.Printf("⏳ artificially waiting %v...", delay)
+	log.Printf("⏳ Server | artificially waiting %v...", delay)
 	time.Sleep(delay)
 
-	source := util.GetIPv4Address()
 	destination := request.Source
 	dataAfter := request.DataBefore + 50
 
@@ -75,12 +77,12 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		request.Source = source
+		request.Source = serverIP
 		request.Destination = s.forwardServer
 		request.DataBefore = dataAfter
-		log.Println("DEBUG | request:", request)
+		log.Println("ℹ️ Server | request:", request)
 
-		log.Printf("🟨 forwarding request to: %s", *forwardServer)
+		log.Printf("🟨 Server | forwarding request to: %s", *forwardServerFlag)
 
 		response, err := client.MyServiceProcessData(ctx, request)
 		if err != nil {
@@ -92,12 +94,13 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 	}
 
 	response := &pb.MyServiceResponse{
-		Source:      source,
+		Origin:      request.Origin,
+		Source:      serverIP,
 		Destination: destination,
 		DataAfter:   dataAfter,
 	}
-	log.Println("DEBUG | response:", response)
+	log.Println("ℹ️ Server | response:", response)
 
-	log.Println("🟩 MyServiceProcessData sending response")
+	log.Println("🟦 Server | MyServiceProcessData sending response...")
 	return response, nil
 }

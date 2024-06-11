@@ -9,13 +9,15 @@ service MyService {
 }
 
 message MyServiceRequest {
-  string source = 1;
-  string destination = 2;
-  int64 data_before = 3;
+  string origin = 1; // (!) origin is the original client and initiator of the request
+  string source = 2; // (!) source is the immediate sender of the request
+  string destination = 3;
+  int64 data_before = 4;
 }
 
 message MyServiceResponse {
-  string source = 1;
-  string destination = 2;
-  int64 data_after = 3;
+  string origin = 1;
+  string source = 2;
+  string destination = 3;
+  int64 data_after = 4;
 }

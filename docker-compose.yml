@@ -22,9 +22,18 @@ services:
       context: .
       dockerfile: Dockerfile.server
     container_name: server3
-    command: -port=8083
+    command: -port=8083 -forward=server4:8084
     ports:
       - 8083:8083
+
+  server4:
+    build: 
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: server4
+    command: -port=8084
+    ports:
+      - 8084:8084
   
   client:
     build: 
@@ -36,3 +45,4 @@ services:
       - server1
       - server2
       - server3
+      - server4
