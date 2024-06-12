@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
@@ -26,6 +27,7 @@ import (
 var (
 	portFlag          = flag.Int("port", 0, "the grpc server port")
 	forwardServerFlag = flag.String("forward", "", "the address of the next grpc server")
+	serverID          = flag.String("id", "", "the server's unique identifier")
 	serverIP          = util.GetIPv4Address()
 )
 
@@ -55,7 +57,7 @@ func main() {
 		resource.Default(),
 		resource.NewWithAttributes(
 			semconv.SchemaURL,
-			semconv.ServiceName("server"),
+			semconv.ServiceName("server"+*serverID),
 		),
 	)
 	if err != nil {
@@ -73,7 +75,16 @@ func main() {
 	// register the tracer provider as the global tracer provider
 	otel.SetTracerProvider(tracerProvider)
 
-	// otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	// (!) this was super important... but I don't understand why the default propagator doesn't automatically work?
+	otel.SetTextMapPropagator(
+		propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		),
+	)
+
+	// create a tracer
+	tracer := otel.Tracer("server-" + *serverID)
 
 	// ---------- OTEL END ---------
 
@@ -91,12 +102,13 @@ func main() {
 
 	myServiceServer := &MyServiceServer{
 		forwardServer: *forwardServerFlag,
+		tracer:        tracer,
 	}
 
 	pb.RegisterMyServiceServer(grpcServer, myServiceServer)
 
 	source := util.GetIPv4Address()
-	log.Printf("🤖 Server | IP: %s Port: %v", source, *portFlag)
+	log.Printf("🤖 Server%s | IP: %s Port: %v", *serverID, source, *portFlag)
 
 	err = grpcServer.Serve(listener)
 	if err != nil {
@@ -107,10 +119,11 @@ func main() {
 type MyServiceServer struct {
 	pb.UnimplementedMyServiceServer
 	forwardServer string
+	tracer        trace.Tracer
 }
 
 func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.MyServiceRequest) (*pb.MyServiceResponse, error) {
-	log.Println("🟪 Server | received request...")
+	log.Printf("🟪 Server%s | received request...", *serverID)
 
 	// (!) actually the context carries the request information including source/destination
 	// log.Println("DEBUG | Server | ctx:", ctx)
@@ -122,16 +135,14 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 	// log.Printf("🔍 Server | spanContext : %v", spanContext)
 	traceID := spanContext.TraceID().String()
 	spanID := spanContext.SpanID().String()
-	log.Printf("🔍 Server | Trace ID: %s Span ID: %s", traceID, spanID)
+	log.Printf("🔍 Server%s | Trace ID: %s Span ID: %s", *serverID, traceID, spanID)
 
-	// (!) HELP....
-	// how to make a child span?
+	// (!) HELP.... how to make a child span?
 	// do we even need to? why can't it auto follow through the request path...
 
-	tracer := otel.Tracer("server")
-
 	// (!) if the context.Context provided in `ctx` contains a Span then the newly-created Span will be a child of that span
-	ctx, childSpan := tracer.Start(ctx, "server-span-test")
+	// add a child to the existing span
+	ctx, childSpan := s.tracer.Start(ctx, "server-"+*serverID+"-span-test")
 	defer childSpan.End()
 
 	valueToAdd := rand.Intn(50)
@@ -140,7 +151,7 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 
 	// add a delay (to emulate that work taking time)
 	delay := time.Duration(rand.Intn(500)) * time.Millisecond
-	log.Printf("⏳ Server | emulating work, adding %d to data, then waiting %v...", valueToAdd, delay)
+	log.Printf("⏳ Server%s | emulating work, adding %d to data, then waiting %v...", *serverID, valueToAdd, delay)
 	time.Sleep(delay)
 
 	// if there is a forward server, then forward request to it
@@ -148,7 +159,7 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 		connection, err := grpc.NewClient(
 			s.forwardServer,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithStatsHandler(otelgrpc.NewClientHandler()), // for otel
+			grpc.WithStatsHandler(otelgrpc.NewClientHandler()), // (!) for otel
 		)
 		if err != nil {
 			log.Fatalf("grpc client could not connect to the grpc server: %v", err)
@@ -157,16 +168,12 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 
 		client := pb.NewMyServiceClient(connection)
 
-		// (!) HELP (!)
-		// i need to propagate the incoming request's context (and tracing info) through to the next request
-		// but isn't this done automatically by the otelgrpc???
-
 		request.Source = serverIP
 		request.Destination = s.forwardServer
 		request.Data = dataAfter
-		log.Println("⬜ Server | request:", request)
+		log.Printf("⬜ Server%s | request: %v", *serverID, request)
 
-		log.Printf("🟨 Server | forwarding request to: %s", *forwardServerFlag)
+		log.Printf("🟨 Server%s | forwarding request to: %s", *serverID, *forwardServerFlag)
 
 		response, err := client.MyServiceProcessData(ctx, request)
 		if err != nil {
@@ -184,8 +191,8 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 		Destination: request.Origin,
 		Data:        dataAfter,
 	}
-	log.Println("⬜ Server | response:", response)
+	log.Printf("⬜ Server%s | response: %v", *serverID, response)
 
-	log.Println("🟦 Server | sending response...")
+	log.Printf("🟦 Server%s | sending response...", *serverID)
 	return response, nil
 }

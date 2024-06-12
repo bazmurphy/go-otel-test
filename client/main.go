@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.25.0"
@@ -39,7 +40,7 @@ func main() {
 	// context to shutdown the tracerProvider
 	ctx := context.Background()
 
-	//  create an otel trace exporter
+	// create an otel trace exporter
 	// traceExporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
 	traceExporter, err := otlptracegrpc.New(ctx,
 		otlptracegrpc.WithEndpoint("jaeger:4317"),
@@ -71,7 +72,16 @@ func main() {
 	// register the tracer provider as the global tracer provider
 	otel.SetTracerProvider(tracerProvider)
 
-	// otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	// (!) this was super important... but I don't understand why the default propagator doesn't automatically work?
+	otel.SetTextMapPropagator(
+		propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		),
+	)
+
+	// create a tracer
+	tracer := tracerProvider.Tracer("client")
 
 	// ---------- OTEL END ---------
 
@@ -87,9 +97,7 @@ func main() {
 
 	client := pb.NewMyServiceClient(connection)
 
-	// set the tracer
-	tracer := tracerProvider.Tracer("client")
-
+	// create a new span
 	ctx, span := tracer.Start(context.Background(), "client-span-test")
 	defer span.End()
 	// log.Printf("🔍 Client | span : %v", span)

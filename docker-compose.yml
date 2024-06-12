@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile.server
     container_name: server1
-    command: -port=8081 -forward=server2:8082
+    command: -port=8081 -forward=server2:8082 -id=1
     ports:
       - 8081:8081
     depends_on:
@@ -15,7 +15,7 @@ services:
       context: .
       dockerfile: Dockerfile.server
     container_name: server2
-    command: -port=8082 -forward=server3:8083
+    command: -port=8082 -forward=server3:8083 -id=2
     ports:
       - 8082:8082
     depends_on: 
@@ -27,7 +27,7 @@ services:
       context: .
       dockerfile: Dockerfile.server
     container_name: server3
-    command: -port=8083 -forward=server4:8084
+    command: -port=8083 -forward=server4:8084 -id=3
     ports:
       - 8083:8083
     depends_on: 
@@ -40,7 +40,7 @@ services:
       context: .
       dockerfile: Dockerfile.server
     container_name: server4
-    command: -port=8084
+    command: -port=8084 -id=4
     ports:
       - 8084:8084
     depends_on: 
