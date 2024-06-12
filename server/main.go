@@ -12,6 +12,8 @@ import (
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -91,11 +93,14 @@ func main() {
 	// 	),
 	// )
 
-	// sets the TraceContext propagator as the global propagator for the OpenTelemetry SDK
+	// sets the global TextMapPropagator for the OpenTelemetry SDK to the W3C Trace Context format
+	// this ensures that the SDK will propagate trace context information
+	// using the standardized W3C Trace Context headers (traceparent, tracestate)
+	// when sending or receiving requests
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	// create a tracer
-	tracer := otel.Tracer("server-" + *serverID + "-tracer")
+	// tracer := otel.Tracer("server-" + *serverID + "-tracer")
 
 	// ---------- OTEL END ---------
 
@@ -113,7 +118,7 @@ func main() {
 
 	myServiceServer := &MyServiceServer{
 		forwardServer: *forwardServerFlag,
-		tracer:        tracer,
+		// tracer:        tracer,
 	}
 
 	pb.RegisterMyServiceServer(grpcServer, myServiceServer)
@@ -130,7 +135,7 @@ func main() {
 type MyServiceServer struct {
 	pb.UnimplementedMyServiceServer
 	forwardServer string
-	tracer        trace.Tracer
+	// tracer        trace.Tracer
 }
 
 func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.MyServiceRequest) (*pb.MyServiceResponse, error) {
@@ -154,6 +159,14 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 	// 	log.Printf("🔍 Server%s | Incoming gRPC Metadata: %v", *serverID, grpcMetadata)
 	// }
 
+	// this is how to add attributes to a span
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("baz.source", requestFrom),
+		attribute.String("baz.destination", requestTo),
+		attribute.Int64("baz.data.before", request.Data),
+	)
+
 	// span := trace.SpanFromContext(ctx)
 	// log.Printf("🔍 Server | span : %v", span)
 	spanContext := trace.SpanContextFromContext(ctx)
@@ -173,6 +186,11 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 	valueToAdd := rand.Intn(50)
 	// increment the value of data (to emulate some work)
 	dataAfter := request.Data + int64(valueToAdd)
+
+	// this is how to add attributes to a span
+	span.SetAttributes(
+		attribute.Int64("baz.data.after", dataAfter),
+	)
 
 	// add a delay (to emulate that work taking time)
 	delay := time.Duration(rand.Intn(500)) * time.Millisecond
@@ -202,6 +220,12 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 
 		log.Printf("🟨 Server%s | Forwarding Request to: %s", *serverID, *forwardServerFlag)
 
+		// this is how to add an event to a span
+		span := trace.SpanFromContext(ctx)
+		span.AddEvent("Request Forwarded", trace.WithAttributes(
+			attribute.String("baz.forward.server", s.forwardServer),
+		))
+
 		response, err := client.MyServiceProcessData(ctx, request)
 		if err != nil {
 			log.Printf("failed to forward request: %v", err)
@@ -209,6 +233,10 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 		}
 
 		log.Printf("🟩 Server%s | Received Response: %v", *serverID, response)
+
+		// this is how to set the status of a span
+		span = trace.SpanFromContext(ctx)
+		span.SetStatus(codes.Ok, "Request processed successfully")
 
 		// update the response
 		response.Source = serverIP
@@ -230,6 +258,12 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 		log.Printf("⬜ Server%s | Created Response: %v", *serverID, response)
 
 		log.Printf("🟦 Server%s | Sending Response...", *serverID)
+
+		// this is how to add an event to a span
+		span := trace.SpanFromContext(ctx)
+		span.AddEvent("Request Returning", trace.WithAttributes(
+			attribute.String("baz.returning.server", request.Origin),
+		))
 
 		return response, nil
 	}

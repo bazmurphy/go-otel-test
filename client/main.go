@@ -86,11 +86,14 @@ func main() {
 	// 	),
 	// )
 
-	// sets the TraceContext propagator as the global propagator for the OpenTelemetry SDK
+	// sets the global TextMapPropagator for the OpenTelemetry SDK to the W3C Trace Context format
+	// this ensures that the SDK will propagate trace context information
+	// using the standardized W3C Trace Context headers (traceparent, tracestate)
+	// when sending or receiving requests
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	// create a tracer
-	tracer := tracerProvider.Tracer("client-" + *clientID + "-tracer")
+	// tracer := tracerProvider.Tracer("client-" + *clientID + "-tracer")
 
 	// ---------- OTEL END ---------
 
@@ -109,8 +112,8 @@ func main() {
 	client := pb.NewMyServiceClient(connection)
 
 	// create a new span
-	ctx, span := tracer.Start(context.Background(), "client-"+*clientID+"-span-test")
-	defer span.End()
+	// ctx, span := tracer.Start(context.Background(), "client-"+*clientID+"-span-test")
+	// defer span.End()
 	// log.Printf("🔍 Client | span : %v", span)
 
 	spanContext := trace.SpanContextFromContext(ctx)
