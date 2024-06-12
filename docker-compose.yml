@@ -49,12 +49,12 @@ services:
       - server3
       - jaeger
   
-  client:
+  client1:
     build: 
       context: .
       dockerfile: Dockerfile.client
-    container_name: client
-    command: -destination=server1:8081
+    container_name: client1
+    command: -destination=server1:8081 -id=1
     depends_on: 
       - server1
       - server2

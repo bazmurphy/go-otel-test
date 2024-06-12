@@ -16,7 +16,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
 
 	pb "github.com/bazmurphy/go-otel-test/proto"
 	"github.com/bazmurphy/go-otel-test/util"
@@ -24,6 +23,7 @@ import (
 
 var (
 	destination = flag.String("destination", "", "the address of the grpc server to connect to")
+	clientID    = flag.String("id", "", "the client's unique identifier")
 	clientIP    = util.GetIPv4Address()
 )
 
@@ -34,7 +34,11 @@ func main() {
 		log.Fatalf("'destination' flag required")
 	}
 
-	log.Println("⬜ Client | IP:", clientIP)
+	if *clientID == "" {
+		log.Fatalf("'id' flag required")
+	}
+
+	log.Printf("⬜ Client%s | IP: %s", *clientID, clientIP)
 
 	// ---------- OTEL START ---------
 
@@ -55,7 +59,7 @@ func main() {
 		resource.Default(),
 		resource.NewWithAttributes(
 			semconv.SchemaURL,
-			semconv.ServiceName("client"),
+			semconv.ServiceName("client-"+*clientID+"-service-name"),
 		),
 	)
 	if err != nil {
@@ -75,15 +79,18 @@ func main() {
 	otel.SetTracerProvider(tracerProvider)
 
 	// (!!!) this was super important... but I don't understand why the default propagator doesn't automatically work?
-	otel.SetTextMapPropagator(
-		propagation.NewCompositeTextMapPropagator(
-			propagation.TraceContext{},
-			propagation.Baggage{},
-		),
-	)
+	// otel.SetTextMapPropagator(
+	// 	propagation.NewCompositeTextMapPropagator(
+	// 		propagation.TraceContext{},
+	// 		propagation.Baggage{},
+	// 	),
+	// )
+
+	// sets the TraceContext propagator as the global propagator for the OpenTelemetry SDK
+	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	// create a tracer
-	tracer := tracerProvider.Tracer("client")
+	tracer := tracerProvider.Tracer("client-" + *clientID + "-tracer")
 
 	// ---------- OTEL END ---------
 
@@ -102,7 +109,7 @@ func main() {
 	client := pb.NewMyServiceClient(connection)
 
 	// create a new span
-	ctx, span := tracer.Start(context.Background(), "client-span-test")
+	ctx, span := tracer.Start(context.Background(), "client-"+*clientID+"-span-test")
 	defer span.End()
 	// log.Printf("🔍 Client | span : %v", span)
 
@@ -110,7 +117,7 @@ func main() {
 	// log.Printf("🔍 Client | spanContext : %v", spanContext)
 	traceID := spanContext.TraceID().String()
 	spanID := spanContext.SpanID().String()
-	log.Printf("🔍 Client | Trace ID: %s Span ID: %s", traceID, spanID)
+	log.Printf("🔍 Client%s | Trace ID: %s Span ID: %s", *clientID, traceID, spanID)
 
 	request := &pb.MyServiceRequest{
 		Origin:      clientIP,
@@ -118,14 +125,12 @@ func main() {
 		Destination: *destination,
 		Data:        0,
 	}
-	log.Println("⬜ Client | request:", request)
+	log.Printf("⬜ Client%s | Created Request: %v", *clientID, request)
 
-	grpcMetadata, ok := metadata.FromOutgoingContext(ctx)
-	if ok {
-		log.Printf("🔍 Client | outgoing gRPC metadata: %v", grpcMetadata)
-	}
+	// grpcMetadata, _ := metadata.FromOutgoingContext(ctx)
+	// log.Printf("🔍 Client | outgoing gRPC metadata: %v", grpcMetadata)
 
-	log.Printf("🟦 Client | sending request to: %s", *destination)
+	log.Printf("🟦 Client%s | Sending Request to: %s", *clientID, *destination)
 
 	start := time.Now()
 
@@ -137,6 +142,6 @@ func main() {
 	end := time.Now()
 	duration := end.Sub(start)
 
-	log.Println("🟩 Client | received response:", response)
-	log.Printf("🟩 Client | total duration: %v", duration)
+	log.Printf("🟩 Client%s | Received Response: %v", *clientID, response)
+	log.Printf("🟩 Client%s | Total Duration: %v", *clientID, duration)
 }
