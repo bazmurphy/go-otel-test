@@ -147,7 +147,7 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 	p, _ := peer.FromContext(ctx)
 	requestFrom := p.Addr.String()
 	requestTo := p.LocalAddr.String()
-	log.Printf("🟫 Server%s | Addr: %s LocalAddr: %s", *serverID, requestFrom, requestTo)
+	log.Printf("🟫 Server%s | From: %s To: %s", *serverID, requestFrom, requestTo)
 
 	// grpcMetadata, ok := metadata.FromIncomingContext(ctx)
 	// if ok {
