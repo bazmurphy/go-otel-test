@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 
 	pb "github.com/bazmurphy/go-otel-test/proto"
 	"github.com/bazmurphy/go-otel-test/util"
@@ -70,12 +71,14 @@ func main() {
 		sdktrace.WithResource(resource),
 	)
 
-	defer func() { _ = tracerProvider.Shutdown(context.Background()) }()
+	defer func() {
+		_ = tracerProvider.Shutdown(ctx)
+	}()
 
 	// register the tracer provider as the global tracer provider
 	otel.SetTracerProvider(tracerProvider)
 
-	// (!) this was super important... but I don't understand why the default propagator doesn't automatically work?
+	// (!!!) this was super important... but I don't understand why the default propagator doesn't automatically work?
 	otel.SetTextMapPropagator(
 		propagation.NewCompositeTextMapPropagator(
 			propagation.TraceContext{},
@@ -127,7 +130,15 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 
 	// (!) actually the context carries the request information including source/destination
 	// log.Println("DEBUG | Server | ctx:", ctx)
+	// BEFORE SetTextMapPropagator:
 	// DEBUG | Server | ctx: context.Background.WithValue(type transport.connectionKey, val <not Stringer>).WithValue(type peer.peerKey, val Peer{Addr: '192.168.32.7:54688', LocalAddr: '192.168.32.2:8081', AuthInfo: <nil>}).WithCancel.WithValue(type metadata.mdIncomingKey, val MD{:authority=[server1:8081], content-type=[application/grpc], user-agent=[grpc-go/1.64.0], grpc-accept-encoding=[gzip]}).WithValue(type grpc.serverKey, val <not Stringer>).WithValue(type trace.traceContextKeyType, val <not Stringer>).WithValue(type trace.traceContextKeyType, val <not Stringer>).WithValue(type otelgrpc.gRPCContextKey, val <not Stringer>).WithValue(type grpc.streamKey, val <not Stringer>)
+	// AFTER SetTextMapPropagator:
+	// DEBUG | Server | ctx: context.Background.WithValue(type transport.connectionKey, val <not Stringer>).WithValue(type peer.peerKey, val Peer{Addr: '192.168.176.7:35092', LocalAddr: '192.168.176.3:8081', AuthInfo: <nil>}).WithCancel.WithValue(type metadata.mdIncomingKey, val MD{user-agent=[grpc-go/1.64.0], :authority=[server1:8081], grpc-accept-encoding=[gzip], traceparent=[00-95952fc50af45f098f646169bd9ee53c-c655a120963fee03-01], content-type=[application/grpc]}).WithValue(type grpc.serverKey, val <not Stringer>).WithValue(type trace.traceContextKeyType, val <not Stringer>).WithValue(type trace.traceContextKeyType, val <not Stringer>).WithValue(type trace.traceContextKeyType, val <not Stringer>).WithValue(type otelgrpc.gRPCContextKey, val <not Stringer>).WithValue(type grpc.streamKey, val <not Stringer>)
+
+	grpcMetadata, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		log.Printf("🔍 Server%s | incoming gRPC Metadata: %v", *serverID, grpcMetadata)
+	}
 
 	// span := trace.SpanFromContext(ctx)
 	// log.Printf("🔍 Server | span : %v", span)

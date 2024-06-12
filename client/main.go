@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 
 	pb "github.com/bazmurphy/go-otel-test/proto"
 	"github.com/bazmurphy/go-otel-test/util"
@@ -37,7 +38,6 @@ func main() {
 
 	// ---------- OTEL START ---------
 
-	// context to shutdown the tracerProvider
 	ctx := context.Background()
 
 	// create an otel trace exporter
@@ -67,12 +67,14 @@ func main() {
 		sdktrace.WithBatcher(traceExporter),
 		sdktrace.WithResource(resource),
 	)
-	defer func() { _ = tracerProvider.Shutdown(ctx) }()
+	defer func() {
+		_ = tracerProvider.Shutdown(ctx)
+	}()
 
 	// register the tracer provider as the global tracer provider
 	otel.SetTracerProvider(tracerProvider)
 
-	// (!) this was super important... but I don't understand why the default propagator doesn't automatically work?
+	// (!!!) this was super important... but I don't understand why the default propagator doesn't automatically work?
 	otel.SetTextMapPropagator(
 		propagation.NewCompositeTextMapPropagator(
 			propagation.TraceContext{},
@@ -89,6 +91,8 @@ func main() {
 		*destination,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()), // (!) for otel,
+		// grpc.WithStatsHandler is a gRPC client option that allows you to specify a custom stats handler for the client. The stats handler is responsible for collecting and processing various statistics and metrics related to the gRPC client's operations.
+		// otelgrpc.NewClientHandler() is a function provided by the OpenTelemetry gRPC instrumentation library (otelgrpc). It creates a new OpenTelemetry client stats handler.
 	)
 	if err != nil {
 		log.Fatalf("grpc client could not connect to the grpc server: %v", err)
@@ -115,6 +119,11 @@ func main() {
 		Data:        0,
 	}
 	log.Println("⬜ Client | request:", request)
+
+	grpcMetadata, ok := metadata.FromOutgoingContext(ctx)
+	if ok {
+		log.Printf("🔍 Client | outgoing gRPC metadata: %v", grpcMetadata)
+	}
 
 	log.Printf("🟦 Client | sending request to: %s", *destination)
 
