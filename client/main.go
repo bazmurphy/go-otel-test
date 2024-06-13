@@ -40,7 +40,7 @@ func main() {
 		log.Fatalf("'id' flag required")
 	}
 
-	log.Printf("⬜ Client%s | IP: %s", *clientID, clientIP)
+	log.Printf("🧑 Client%s | IP: %s", *clientID, clientIP)
 
 	// ---------- OTEL SETUP START ---------
 
