@@ -9,9 +9,14 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
       - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
     ports:
-      - 8081:8081
+      - 9091:8081
+    networks:
+      go_otel_test_network:
+        ipv4_address: 192.168.200.1
 
   server2:
+    depends_on: 
+      - server1
     build: 
       context: .
       dockerfile: Dockerfile.server
@@ -21,11 +26,15 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
       - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
     ports:
-      - 8082:8082
-    depends_on: 
-      - server1
+      - 9092:8082
+    networks:
+      go_otel_test_network:
+        ipv4_address: 192.168.200.2
 
   server3:
+    depends_on: 
+      - server1
+      - server2
     build: 
       context: .
       dockerfile: Dockerfile.server
@@ -35,12 +44,16 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
       - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
     ports:
-      - 8083:8083
+      - 9093:8083
+    networks:
+      go_otel_test_network:
+        ipv4_address: 192.168.200.3
+
+  server4:
     depends_on: 
       - server1
       - server2
-
-  server4:
+      - server3
     build: 
       context: .
       dockerfile: Dockerfile.server
@@ -50,13 +63,17 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
       - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
     ports:
-      - 8084:8084
+      - 9094:8084
+    networks:
+      go_otel_test_network:
+        ipv4_address: 192.168.200.4
+
+  server5:
     depends_on: 
       - server1
       - server2
       - server3
-
-  server5:
+      - server4
     build: 
       context: .
       dockerfile: Dockerfile.server
@@ -66,14 +83,18 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
       - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
     ports:
-      - 8085:8085
+      - 9095:8085
+    networks:
+      go_otel_test_network:
+        ipv4_address: 192.168.200.5
+  
+  client1:
     depends_on: 
       - server1
       - server2
       - server3
       - server4
-  
-  client1:
+      - server5
     build: 
       context: .
       dockerfile: Dockerfile.client
@@ -82,9 +103,13 @@ services:
     environment:
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
       - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
-    depends_on: 
-      - server1
-      - server2
-      - server3
-      - server4
-      - server5
+    networks:
+      go_otel_test_network:
+        ipv4_address: 192.168.100.1
+
+networks:
+  go_otel_test_network:
+    ipam:
+      driver: default
+      config:
+        - subnet: 192.168.0.0/16
