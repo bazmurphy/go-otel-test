@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/contrib/processors/baggage/baggagetrace"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -76,6 +78,7 @@ func main() {
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(traceExporter),
 		sdktrace.WithResource(resource),
+		sdktrace.WithSpanProcessor(baggagetrace.New()), // (!) for passing baggage down
 	)
 
 	defer func() {
@@ -101,21 +104,17 @@ func main() {
 	// create a tracer
 	tracer := tracerProvider.Tracer("client-" + *clientID + "-tracer")
 
+	ctx = context.Background()
+
 	// create a new span
-	ctx, rootSpan := tracer.Start(context.Background(), "client-"+*clientID+"-root-span")
+	ctx, rootSpan := tracer.Start(ctx, "client-"+*clientID+"-root-span")
 	defer rootSpan.End()
 	// log.Printf("🔍 Client%s | rootSpan : %v", *clientID, rootSpan)
-
-	spanContext := trace.SpanContextFromContext(ctx)
-	// log.Printf("🔍 Client | spanContext : %v", spanContext)
-	traceID := spanContext.TraceID().String()
-	spanID := spanContext.SpanID().String()
-	log.Printf("🔍 Client%s | Trace ID: %s Span ID: %s", *clientID, traceID, spanID)
 
 	// generate a uuid for the request id to add as baggage
 	requestID := uuid.NewString()
 
-	// create a new baggage member with the request id
+	// create a new baggage member with the request_id
 	requestIDMember, err := baggage.NewMember("request_id", requestID)
 	if err != nil {
 		log.Fatalf("failed to create baggage member: %v", err)
@@ -130,8 +129,22 @@ func main() {
 	// add the baggage to the context
 	ctx = baggage.ContextWithBaggage(ctx, requestIDBaggage)
 
+	// add the baggage as an attribute on the root span
+	// (!!!) we have to do this because the Span Processor above doesn't seem to do this on the root span??
+	// is this an order of operations issue?
+	rootSpan.SetAttributes(attribute.String("request_id", requestID))
+
+	spanContext := trace.SpanContextFromContext(ctx)
+	// log.Printf("🔍 Client | spanContext : %v", spanContext)
+	traceID := spanContext.TraceID().String()
+	spanID := spanContext.SpanID().String()
+	log.Printf("🔍 Client%s | Trace ID: %s Span ID: %s", *clientID, traceID, spanID)
+
 	baggageCheck := baggage.FromContext(ctx)
-	log.Printf("🧳 Client%s | Baggage: %v", *clientID, baggageCheck)
+	// log.Printf("🧳 Client%s | Baggage: %v", *clientID, baggageCheck)
+
+	requestIDFromBaggage := baggageCheck.Member("request_id")
+	log.Printf("🧳 Client%s | Request ID: %v", *clientID, requestIDFromBaggage.Value())
 
 	connection, err := grpc.NewClient(
 		*destination,

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/contrib/processors/baggage/baggagetrace"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
@@ -82,6 +83,7 @@ func main() {
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(traceExporter),
 		sdktrace.WithResource(resource),
+		sdktrace.WithSpanProcessor(baggagetrace.New()), // (!) for passing baggage down
 	)
 
 	defer func() {
@@ -169,6 +171,10 @@ func (s *MyServiceServer) ProcessData(ctx context.Context, request *pb.ProcessDa
 
 	requestSpan.AddEvent(fmt.Sprintf("Server%s Received Request", *serverID))
 
+	// add the baggage as an attribute on the request span
+	// (!!!) this is now covered by the Span Processor above, which adds it automatically to all child spans
+	// requestSpan.SetAttributes(attribute.String("request_id", requestID.Value()))
+
 	spanContext := trace.SpanContextFromContext(ctx)
 	// log.Printf("🔍 Server%s | spanContext : %v", *serverID, spanContext)
 	traceID := spanContext.TraceID().String()
@@ -177,7 +183,10 @@ func (s *MyServiceServer) ProcessData(ctx context.Context, request *pb.ProcessDa
 
 	// check the baggage
 	baggageCheck := baggage.FromContext(ctx)
-	log.Printf("🧳 Server%s | Baggage: %v", *serverID, baggageCheck)
+	// log.Printf("🧳 Server%s | Baggage: %v", *serverID, baggageCheck)
+
+	requestIDFromBaggage := baggageCheck.Member("request_id")
+	log.Printf("🧳 Server%s | Request ID: %v", *serverID, requestIDFromBaggage.Value())
 
 	p, _ := peer.FromContext(ctx)
 	requestFrom := p.Addr.String()
@@ -212,10 +221,11 @@ func (s *MyServiceServer) ProcessData(ctx context.Context, request *pb.ProcessDa
 
 	switch *serverID {
 	// emulate that server 3 has a problem that causes it to process data much slower than the other servers
-	case "3":
-		randomDelayToAdd = 100
+	// case "3":
+	// 	randomDelayToAdd = 100
 	default:
-		randomDelayToAdd = rand.Intn(10) + 1
+		// randomDelayToAdd = rand.Intn(10) + 1
+		randomDelayToAdd = rand.Intn(5) + 1
 	}
 
 	delay := time.Duration(randomDelayToAdd) * time.Millisecond
