@@ -151,7 +151,7 @@ type MyServiceServer struct {
 	tracer        trace.Tracer
 }
 
-func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.MyServiceRequest) (*pb.MyServiceResponse, error) {
+func (s *MyServiceServer) ProcessData(ctx context.Context, request *pb.ProcessDataRequest) (*pb.ProcessDataResponse, error) {
 	log.Printf("🟩 Server%s | Received Request...", *serverID)
 
 	// (!) actually the context carries the request information including source/destination (presumably from the grpc request?)
@@ -198,13 +198,23 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 		attribute.Int64("baz.data.before", request.Data),
 	)
 
-	valueToAdd := rand.Intn(50)
 	// adjust the value of data (to emulate some work happening)
-	dataAfter := request.Data + int64(valueToAdd)
+	randomValueToAdd := rand.Intn(50)
+	dataAfter := request.Data + int64(randomValueToAdd)
 
 	// add a delay (to emulate that work taking time)
-	delay := time.Duration(rand.Intn(500)) * time.Millisecond
-	log.Printf("⏳ Server%s | Emulating work, Adding %d to data, then waiting %v...", *serverID, valueToAdd, delay)
+	var randomDelayToAdd int
+
+	switch *serverID {
+	// emulate that server 3 has a problem that causes it to process data much slower than the other servers
+	case "3":
+		randomDelayToAdd = 100
+	default:
+		randomDelayToAdd = rand.Intn(10) + 1
+	}
+
+	delay := time.Duration(randomDelayToAdd) * time.Millisecond
+	log.Printf("⏳ Server%s | Emulating work, Adding %d to data, then waiting %v...", *serverID, randomValueToAdd, delay)
 	time.Sleep(delay)
 
 	workSpan.AddEvent(fmt.Sprintf("Server%s Finished Work On Data", *serverID))
@@ -241,7 +251,7 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 			attribute.String("baz.forward.server", s.forwardServer),
 		))
 
-		response, err := client.MyServiceProcessData(ctx, request)
+		response, err := client.ProcessData(ctx, request)
 		if err != nil {
 			log.Printf("failed to forward request: %v", err)
 			return nil, err
@@ -266,7 +276,7 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 		return response, nil
 	} else {
 		// otherwise respond to the origin caller
-		response := &pb.MyServiceResponse{
+		response := &pb.ProcessDataResponse{
 			Origin:      request.Origin,
 			Source:      serverIP,
 			Destination: request.Source,

@@ -19,14 +19,14 @@ import (
 const _ = grpc.SupportPackageIsVersion8
 
 const (
-	MyService_MyServiceProcessData_FullMethodName = "/myservice.MyService/MyServiceProcessData"
+	MyService_ProcessData_FullMethodName = "/myservice.MyService/ProcessData"
 )
 
 // MyServiceClient is the client API for MyService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MyServiceClient interface {
-	MyServiceProcessData(ctx context.Context, in *MyServiceRequest, opts ...grpc.CallOption) (*MyServiceResponse, error)
+	ProcessData(ctx context.Context, in *ProcessDataRequest, opts ...grpc.CallOption) (*ProcessDataResponse, error)
 }
 
 type myServiceClient struct {
@@ -37,10 +37,10 @@ func NewMyServiceClient(cc grpc.ClientConnInterface) MyServiceClient {
 	return &myServiceClient{cc}
 }
 
-func (c *myServiceClient) MyServiceProcessData(ctx context.Context, in *MyServiceRequest, opts ...grpc.CallOption) (*MyServiceResponse, error) {
+func (c *myServiceClient) ProcessData(ctx context.Context, in *ProcessDataRequest, opts ...grpc.CallOption) (*ProcessDataResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(MyServiceResponse)
-	err := c.cc.Invoke(ctx, MyService_MyServiceProcessData_FullMethodName, in, out, cOpts...)
+	out := new(ProcessDataResponse)
+	err := c.cc.Invoke(ctx, MyService_ProcessData_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (c *myServiceClient) MyServiceProcessData(ctx context.Context, in *MyServic
 // All implementations must embed UnimplementedMyServiceServer
 // for forward compatibility
 type MyServiceServer interface {
-	MyServiceProcessData(context.Context, *MyServiceRequest) (*MyServiceResponse, error)
+	ProcessData(context.Context, *ProcessDataRequest) (*ProcessDataResponse, error)
 	mustEmbedUnimplementedMyServiceServer()
 }
 
@@ -59,8 +59,8 @@ type MyServiceServer interface {
 type UnimplementedMyServiceServer struct {
 }
 
-func (UnimplementedMyServiceServer) MyServiceProcessData(context.Context, *MyServiceRequest) (*MyServiceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method MyServiceProcessData not implemented")
+func (UnimplementedMyServiceServer) ProcessData(context.Context, *ProcessDataRequest) (*ProcessDataResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ProcessData not implemented")
 }
 func (UnimplementedMyServiceServer) mustEmbedUnimplementedMyServiceServer() {}
 
@@ -75,20 +75,20 @@ func RegisterMyServiceServer(s grpc.ServiceRegistrar, srv MyServiceServer) {
 	s.RegisterService(&MyService_ServiceDesc, srv)
 }
 
-func _MyService_MyServiceProcessData_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MyServiceRequest)
+func _MyService_ProcessData_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProcessDataRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MyServiceServer).MyServiceProcessData(ctx, in)
+		return srv.(MyServiceServer).ProcessData(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: MyService_MyServiceProcessData_FullMethodName,
+		FullMethod: MyService_ProcessData_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MyServiceServer).MyServiceProcessData(ctx, req.(*MyServiceRequest))
+		return srv.(MyServiceServer).ProcessData(ctx, req.(*ProcessDataRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -101,8 +101,8 @@ var MyService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*MyServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "MyServiceProcessData",
-			Handler:    _MyService_MyServiceProcessData_Handler,
+			MethodName: "ProcessData",
+			Handler:    _MyService_ProcessData_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

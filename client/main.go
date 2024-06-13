@@ -125,7 +125,7 @@ func main() {
 
 	client := pb.NewMyServiceClient(connection)
 
-	request := &pb.MyServiceRequest{
+	request := &pb.ProcessDataRequest{
 		Origin:      clientIP,
 		Source:      clientIP,
 		Destination: *destination,
@@ -142,9 +142,9 @@ func main() {
 
 	rootSpan.AddEvent(fmt.Sprintf("Client%s Sent Request", *clientID))
 
-	response, err := client.MyServiceProcessData(ctx, request)
+	response, err := client.ProcessData(ctx, request)
 	if err != nil {
-		log.Printf("failed to send request and receive response: %v", err)
+		log.Fatalf("failed to send request and receive response: %v", err)
 	}
 
 	rootSpan.AddEvent(fmt.Sprintf("Client%s Received Response", *clientID))

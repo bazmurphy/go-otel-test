@@ -5,17 +5,17 @@ package myservice;
 option go_package = "./proto";
 
 service MyService {
-  rpc MyServiceProcessData (MyServiceRequest) returns (MyServiceResponse) {}
+  rpc ProcessData (ProcessDataRequest) returns (ProcessDataResponse) {}
 }
 
-message MyServiceRequest {
+message ProcessDataRequest {
   string origin = 1; // (!) origin is the original client and initiator of the request
   string source = 2; // (!) source is the immediate sender of the request
   string destination = 3;
   int64 data = 4;
 }
 
-message MyServiceResponse {
+message ProcessDataResponse {
   string origin = 1;
   string source = 2;
   string destination = 3;
