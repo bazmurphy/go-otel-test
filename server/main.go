@@ -7,14 +7,12 @@ import (
 	"log"
 	"math/rand"
 	"net"
-	"os"
 	"strings"
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
@@ -48,37 +46,23 @@ func main() {
 		log.Fatalf("'id' flag required")
 	}
 
-	// ---------- OTEL START ---------
+	// ---------- OTEL SETUP START ---------
 
-	// serviceName := os.Getenv("OTEL_SERVICE_NAME")
-	// "your-service-name"
-	// otelExporterOTLPEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-	// "https://api.honeycomb.io:443" (US) or "https://api.eu1.honeycomb.io:443" (EU)
-	// otelExporterOTLPHeaders := os.Getenv("OTEL_EXPORTER_OTLP_HEADERS")
-	// "x-honeycomb-team=your-api-key"
-
-	honeycombEUEndpoint := "https://api.eu1.honeycomb.io:443"
-	honeycombAPIKey := os.Getenv("HONEYCOMB_API_KEY")
-	if honeycombAPIKey == "" {
-		log.Fatal("HONEYCOMB_API_KEY (from environment variable) required")
-	}
-
-	honeycombHeaders := map[string]string{
-		"x-honeycomb-team": honeycombAPIKey,
-	}
-
-	grpcTraceClient := otlptracegrpc.NewClient(
-		otlptracegrpc.WithEndpoint(honeycombEUEndpoint),
-		otlptracegrpc.WithHeaders(honeycombHeaders),
-	)
+	grpcTraceClient := otlptracegrpc.NewClient()
 
 	ctx := context.Background()
 
-	// TOOD: should this actually be a otlptracegrpc.New() ?
 	traceExporter, err := otlptrace.New(ctx, grpcTraceClient)
 	if err != nil {
 		log.Fatalf("failed to create otel trace exporter: %v", err)
 	}
+
+	defer func() {
+		err := traceExporter.Shutdown(ctx)
+		if err != nil {
+			log.Fatalf("failed shutting down otel trace exporter: %v", err)
+		}
+	}()
 
 	resource, err := resource.Merge(
 		resource.Default(),
@@ -97,9 +81,9 @@ func main() {
 	)
 
 	defer func() {
-		err := tracerProvider.Shutdown(ctx)
+		err = tracerProvider.Shutdown(ctx)
 		if err != nil {
-			log.Fatalf("failed shutting down the otel tracer provider: %v", err)
+			log.Fatalf("failed shutting down otel tracer provider: %v", err)
 		}
 	}()
 
@@ -114,14 +98,14 @@ func main() {
 		),
 	)
 
-	// create a tracer
-	// tracer := otel.Tracer("server-" + *serverID + "-tracer")
+	// ---------- OTEL SETUP END ---------
 
-	// ---------- OTEL END ---------
+	// create a tracer
+	tracer := otel.Tracer("server-" + *serverID + "-tracer")
 
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", *portFlag))
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		log.Fatalf("failed to listen on tcp port %d: %v", *portFlag, err)
 	}
 
 	grpcServer := grpc.NewServer(
@@ -133,7 +117,7 @@ func main() {
 
 	myServiceServer := &MyServiceServer{
 		forwardServer: *forwardServerFlag,
-		// tracer:        tracer,
+		tracer:        tracer,
 	}
 
 	pb.RegisterMyServiceServer(grpcServer, myServiceServer)
@@ -150,7 +134,7 @@ func main() {
 type MyServiceServer struct {
 	pb.UnimplementedMyServiceServer
 	forwardServer string
-	// tracer        trace.Tracer
+	tracer        trace.Tracer
 }
 
 func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.MyServiceRequest) (*pb.MyServiceResponse, error) {
@@ -164,6 +148,25 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 	// AFTER SetTextMapPropagator:
 	// DEBUG | Server | ctx: context.Background.WithValue(type transport.connectionKey, val <not Stringer>).WithValue(type peer.peerKey, val Peer{Addr: '192.168.176.7:35092', LocalAddr: '192.168.176.3:8081', AuthInfo: <nil>}).WithCancel.WithValue(type metadata.mdIncomingKey, val MD{user-agent=[grpc-go/1.64.0], :authority=[server1:8081], grpc-accept-encoding=[gzip], traceparent=[00-95952fc50af45f098f646169bd9ee53c-c655a120963fee03-01], content-type=[application/grpc]}).WithValue(type grpc.serverKey, val <not Stringer>).WithValue(type trace.traceContextKeyType, val <not Stringer>).WithValue(type trace.traceContextKeyType, val <not Stringer>).WithValue(type trace.traceContextKeyType, val <not Stringer>).WithValue(type otelgrpc.gRPCContextKey, val <not Stringer>).WithValue(type grpc.streamKey, val <not Stringer>)
 
+	// get the current span from context
+	span := trace.SpanFromContext(ctx)
+	// log.Printf("🔍 Server%s | span : %v", *serverID, span)
+
+	spanContext := trace.SpanContextFromContext(ctx)
+	// log.Printf("🔍 Server%s | spanContext : %v", *serverID, spanContext)
+
+	traceID := spanContext.TraceID().String()
+	spanID := spanContext.SpanID().String()
+	log.Printf("🔍 Server%s | Trace ID: %s Span ID: %s", *serverID, traceID, spanID)
+
+	// (!) if the ctx already contains a span the newly created span will be a child of that span
+	// (in this case the span contained within the ctx is the automatically created span by otelgrpc)
+	// ctx, childSpan := s.tracer.Start(ctx, "server-"+*serverID+"-child-span")
+	// defer childSpan.End()
+	// log.Printf("🔍 Server%s | childSpan : %v", *serverID, childSpan)
+
+	span.AddEvent(fmt.Sprintf("Server%s Received Request", *serverID))
+
 	p, _ := peer.FromContext(ctx)
 	requestFrom := p.Addr.String()
 	requestTo := p.LocalAddr.String()
@@ -174,43 +177,29 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 	// 	log.Printf("🔍 Server%s | Incoming gRPC Metadata: %v", *serverID, grpcMetadata)
 	// }
 
-	// this is how to add attributes to a span
-	span := trace.SpanFromContext(ctx)
 	span.SetAttributes(
 		attribute.String("baz.source", requestFrom),
 		attribute.String("baz.destination", requestTo),
+	)
+
+	span.AddEvent(fmt.Sprintf("Server%s Started Work On Data", *serverID))
+	span.SetAttributes(
 		attribute.Int64("baz.data.before", request.Data),
 	)
 
-	// span := trace.SpanFromContext(ctx)
-	// log.Printf("🔍 Server | span : %v", span)
-	spanContext := trace.SpanContextFromContext(ctx)
-	// log.Printf("🔍 Server | spanContext : %v", spanContext)
-	traceID := spanContext.TraceID().String()
-	spanID := spanContext.SpanID().String()
-	log.Printf("🔍 Server%s | Trace ID: %s Span ID: %s", *serverID, traceID, spanID)
-
-	// (!) HELP.... how to make a child span?
-	// do we even need to? why can't it auto follow through the request path...
-
-	// (!) if the context.Context provided in `ctx` contains a Span then the newly-created Span will be a child of that span
-	// add a child to the existing span (but this seems to automatically happen via otelgrpc?)
-	// ctx, childSpan := s.tracer.Start(ctx, "server-"+*serverID+"-span-test")
-	// defer childSpan.End()
-
 	valueToAdd := rand.Intn(50)
-	// increment the value of data (to emulate some work)
+	// adjust the value of data (to emulate some work happening)
 	dataAfter := request.Data + int64(valueToAdd)
-
-	// this is how to add attributes to a span
-	span.SetAttributes(
-		attribute.Int64("baz.data.after", dataAfter),
-	)
 
 	// add a delay (to emulate that work taking time)
 	delay := time.Duration(rand.Intn(500)) * time.Millisecond
 	log.Printf("⏳ Server%s | Emulating work, Adding %d to data, then waiting %v...", *serverID, valueToAdd, delay)
 	time.Sleep(delay)
+
+	span.AddEvent(fmt.Sprintf("Server%s Finished Work On Data", *serverID))
+	span.SetAttributes(
+		attribute.Int64("baz.data.after", dataAfter),
+	)
 
 	if s.forwardServer != "" {
 		// if there is a forward server, then forward the request to it
@@ -235,9 +224,7 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 
 		log.Printf("🟨 Server%s | Forwarding Request to: %s", *serverID, *forwardServerFlag)
 
-		// this is how to add an event to a span
-		span := trace.SpanFromContext(ctx)
-		span.AddEvent("Request Forwarded", trace.WithAttributes(
+		span.AddEvent(fmt.Sprintf("Server%s Forwarding Request", *serverID), trace.WithAttributes(
 			attribute.String("baz.forward.server", s.forwardServer),
 		))
 
@@ -249,9 +236,9 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 
 		log.Printf("🟩 Server%s | Received Response: %v", *serverID, response)
 
-		// this is how to set the status of a span
-		span = trace.SpanFromContext(ctx)
-		span.SetStatus(codes.Ok, "Request processed successfully")
+		span.AddEvent(fmt.Sprintf("Server%s Received Response", *serverID))
+
+		// span.SetStatus(codes.Ok, "Request processed successfully")
 
 		// update the response
 		response.Source = serverIP
@@ -260,6 +247,8 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 		log.Printf("⬜ Server%s | Updated Response: %v", *serverID, response)
 
 		log.Printf("🟦 Server%s | Sending Response...", *serverID)
+
+		span.AddEvent(fmt.Sprintf("Server%s Returning Response", *serverID))
 
 		return response, nil
 	} else {
@@ -274,10 +263,8 @@ func (s *MyServiceServer) MyServiceProcessData(ctx context.Context, request *pb.
 
 		log.Printf("🟦 Server%s | Sending Response...", *serverID)
 
-		// this is how to add an event to a span
-		span := trace.SpanFromContext(ctx)
-		span.AddEvent("Request Returning", trace.WithAttributes(
-			attribute.String("baz.returning.server", request.Origin),
+		span.AddEvent(fmt.Sprintf("Server%s Returning Response", *serverID), trace.WithAttributes(
+			attribute.String("baz.return.server", request.Origin),
 		))
 
 		return response, nil

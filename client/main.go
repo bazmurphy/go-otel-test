@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -42,37 +42,23 @@ func main() {
 
 	log.Printf("⬜ Client%s | IP: %s", *clientID, clientIP)
 
-	// ---------- OTEL START ---------
+	// ---------- OTEL SETUP START ---------
 
-	// serviceName := os.Getenv("OTEL_SERVICE_NAME")
-	// "your-service-name"
-	// otelExporterOTLPEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-	// "https://api.honeycomb.io:443" (US) or "https://api.eu1.honeycomb.io:443" (EU)
-	// otelExporterOTLPHeaders := os.Getenv("OTEL_EXPORTER_OTLP_HEADERS")
-	// "x-honeycomb-team=your-api-key"
-
-	honeycombEUEndpoint := "https://api.eu1.honeycomb.io:443"
-	honeycombAPIKey := os.Getenv("HONEYCOMB_API_KEY")
-	if honeycombAPIKey == "" {
-		log.Fatal("HONEYCOMB_API_KEY (from environment variable) required")
-	}
-
-	honeycombHeaders := map[string]string{
-		"x-honeycomb-team": honeycombAPIKey,
-	}
-
-	grpcTraceClient := otlptracegrpc.NewClient(
-		otlptracegrpc.WithEndpoint(honeycombEUEndpoint),
-		otlptracegrpc.WithHeaders(honeycombHeaders),
-	)
+	grpcTraceClient := otlptracegrpc.NewClient()
 
 	ctx := context.Background()
 
-	// TOOD: should this actually be a otlptracegrpc.New() ?
 	traceExporter, err := otlptrace.New(ctx, grpcTraceClient)
 	if err != nil {
 		log.Fatalf("failed to create otel trace exporter: %v", err)
 	}
+
+	defer func() {
+		err := traceExporter.Shutdown(ctx)
+		if err != nil {
+			log.Fatalf("failed shutting down otel trace exporter: %v", err)
+		}
+	}()
 
 	resource, err := resource.Merge(
 		resource.Default(),
@@ -91,9 +77,9 @@ func main() {
 	)
 
 	defer func() {
-		err := tracerProvider.Shutdown(ctx)
+		err = tracerProvider.Shutdown(ctx)
 		if err != nil {
-			log.Fatalf("failed shutting down the otel tracer provider: %v", err)
+			log.Fatalf("failed shutting down otel tracer provider: %v", err)
 		}
 	}()
 
@@ -108,16 +94,28 @@ func main() {
 		),
 	)
 
-	// create a tracer
-	// tracer := tracerProvider.Tracer("client-" + *clientID + "-tracer")
+	// ---------- OTEL SETUP END ---------
 
-	// ---------- OTEL END ---------
+	// create a tracer
+	tracer := tracerProvider.Tracer("client-" + *clientID + "-tracer")
+
+	// create a new span
+	ctx, rootSpan := tracer.Start(context.Background(), "client-"+*clientID+"-root-span")
+	defer rootSpan.End()
+	// log.Printf("🔍 Client%s | rootSpan : %v", *clientID, rootSpan)
+
+	spanContext := trace.SpanContextFromContext(ctx)
+	// log.Printf("🔍 Client | spanContext : %v", spanContext)
+	traceID := spanContext.TraceID().String()
+	spanID := spanContext.SpanID().String()
+	log.Printf("🔍 Client%s | Trace ID: %s Span ID: %s", *clientID, traceID, spanID)
 
 	connection, err := grpc.NewClient(
 		*destination,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()), // (!) for otel,
-		// grpc.WithStatsHandler is a gRPC client option that allows you to specify a custom stats handler for the client. The stats handler is responsible for collecting and processing various statistics and metrics related to the gRPC client's operations.
+		// grpc.WithStatsHandler is a gRPC client option that allows you to specify a custom stats handler for the client.
+		// the stats handler is responsible for collecting and processing various statistics and metrics related to the gRPC client's operations.
 		// otelgrpc.NewClientHandler() is a function provided by the OpenTelemetry gRPC instrumentation library (otelgrpc). It creates a new OpenTelemetry client stats handler.
 	)
 	if err != nil {
@@ -126,17 +124,6 @@ func main() {
 	defer connection.Close()
 
 	client := pb.NewMyServiceClient(connection)
-
-	// create a new span
-	// ctx, span := tracer.Start(context.Background(), "client-"+*clientID+"-span-test")
-	// defer span.End()
-	// log.Printf("🔍 Client | span : %v", span)
-
-	spanContext := trace.SpanContextFromContext(ctx)
-	// log.Printf("🔍 Client | spanContext : %v", spanContext)
-	traceID := spanContext.TraceID().String()
-	spanID := spanContext.SpanID().String()
-	log.Printf("🔍 Client%s | Trace ID: %s Span ID: %s", *clientID, traceID, spanID)
 
 	request := &pb.MyServiceRequest{
 		Origin:      clientIP,
@@ -153,10 +140,14 @@ func main() {
 
 	start := time.Now()
 
+	rootSpan.AddEvent(fmt.Sprintf("Client%s Sent Request", *clientID))
+
 	response, err := client.MyServiceProcessData(ctx, request)
 	if err != nil {
-		log.Printf("failed to send request: %v", err)
+		log.Printf("failed to send request and receive response: %v", err)
 	}
+
+	rootSpan.AddEvent(fmt.Sprintf("Client%s Received Response", *clientID))
 
 	end := time.Now()
 	duration := end.Sub(start)

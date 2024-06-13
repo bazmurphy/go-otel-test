@@ -1,6 +1,6 @@
 module github.com/bazmurphy/go-otel-test
 
-go 1.22.0
+go 1.22.3
 
 require (
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.52.0
