@@ -9,6 +9,7 @@ import (
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
@@ -21,6 +22,7 @@ import (
 
 	pb "github.com/bazmurphy/go-otel-test/proto"
 	"github.com/bazmurphy/go-otel-test/util"
+	"github.com/google/uuid"
 )
 
 var (
@@ -103,6 +105,28 @@ func main() {
 	ctx, rootSpan := tracer.Start(context.Background(), "client-"+*clientID+"-root-span")
 	defer rootSpan.End()
 	// log.Printf("🔍 Client%s | rootSpan : %v", *clientID, rootSpan)
+
+	// generate a uuid for the request id
+	requestID := uuid.NewString()
+
+	// create a new baggage member
+	requestIDMember, err := baggage.NewMember("request_id", requestID)
+	if err != nil {
+		log.Fatalf("failed to create baggage member: %v", err)
+	}
+
+	// create a new baggage
+	requestIDBaggage, err := baggage.New(requestIDMember)
+	if err != nil {
+		log.Fatalf("failed to create baggage: %v", err)
+	}
+
+	// add the baggage to the context
+	ctx = baggage.ContextWithBaggage(ctx, requestIDBaggage)
+
+	baggageCheck := baggage.FromContext(ctx)
+
+	log.Printf("🧑 Client%s | Baggage: %s", *clientID, baggageCheck)
 
 	spanContext := trace.SpanContextFromContext(ctx)
 	// log.Printf("🔍 Client | spanContext : %v", spanContext)
