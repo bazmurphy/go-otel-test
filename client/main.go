@@ -106,10 +106,16 @@ func main() {
 	defer rootSpan.End()
 	// log.Printf("🔍 Client%s | rootSpan : %v", *clientID, rootSpan)
 
-	// generate a uuid for the request id
+	spanContext := trace.SpanContextFromContext(ctx)
+	// log.Printf("🔍 Client | spanContext : %v", spanContext)
+	traceID := spanContext.TraceID().String()
+	spanID := spanContext.SpanID().String()
+	log.Printf("🔍 Client%s | Trace ID: %s Span ID: %s", *clientID, traceID, spanID)
+
+	// generate a uuid for the request id to add as baggage
 	requestID := uuid.NewString()
 
-	// create a new baggage member
+	// create a new baggage member with the request id
 	requestIDMember, err := baggage.NewMember("request_id", requestID)
 	if err != nil {
 		log.Fatalf("failed to create baggage member: %v", err)
@@ -125,14 +131,7 @@ func main() {
 	ctx = baggage.ContextWithBaggage(ctx, requestIDBaggage)
 
 	baggageCheck := baggage.FromContext(ctx)
-
-	log.Printf("🧑 Client%s | Baggage: %s", *clientID, baggageCheck)
-
-	spanContext := trace.SpanContextFromContext(ctx)
-	// log.Printf("🔍 Client | spanContext : %v", spanContext)
-	traceID := spanContext.TraceID().String()
-	spanID := spanContext.SpanID().String()
-	log.Printf("🔍 Client%s | Trace ID: %s Span ID: %s", *clientID, traceID, spanID)
+	log.Printf("🧳 Client%s | Baggage: %v", *clientID, baggageCheck)
 
 	connection, err := grpc.NewClient(
 		*destination,

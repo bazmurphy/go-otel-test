@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
@@ -173,6 +174,10 @@ func (s *MyServiceServer) ProcessData(ctx context.Context, request *pb.ProcessDa
 	traceID := spanContext.TraceID().String()
 	spanID := spanContext.SpanID().String()
 	log.Printf("🔍 Server%s | Trace ID: %s Span ID: %s", *serverID, traceID, spanID)
+
+	// check the baggage
+	baggageCheck := baggage.FromContext(ctx)
+	log.Printf("🧳 Server%s | Baggage: %v", *serverID, baggageCheck)
 
 	p, _ := peer.FromContext(ctx)
 	requestFrom := p.Addr.String()
