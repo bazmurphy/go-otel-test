@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"os"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -48,19 +50,36 @@ func main() {
 
 	// ---------- OTEL START ---------
 
-	ctx := context.Background()
+	// serviceName := os.Getenv("OTEL_SERVICE_NAME")
+	// "your-service-name"
+	// otelExporterOTLPEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	// "https://api.honeycomb.io:443" (US) or "https://api.eu1.honeycomb.io:443" (EU)
+	// otelExporterOTLPHeaders := os.Getenv("OTEL_EXPORTER_OTLP_HEADERS")
+	// "x-honeycomb-team=your-api-key"
 
-	// create an otel exporter
-	// traceExporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
-	traceExporter, err := otlptracegrpc.New(ctx,
-		otlptracegrpc.WithEndpoint("jaeger:4317"),
-		otlptracegrpc.WithInsecure(),
-	)
-	if err != nil {
-		log.Fatalf("failed to create otel exporter: %v", err)
+	honeycombEUEndpoint := "https://api.eu1.honeycomb.io:443"
+	honeycombAPIKey := os.Getenv("HONEYCOMB_API_KEY")
+	if honeycombAPIKey == "" {
+		log.Fatal("HONEYCOMB_API_KEY (from environment variable) required")
 	}
 
-	// create an otel resource
+	honeycombHeaders := map[string]string{
+		"x-honeycomb-team": honeycombAPIKey,
+	}
+
+	grpcTraceClient := otlptracegrpc.NewClient(
+		otlptracegrpc.WithEndpoint(honeycombEUEndpoint),
+		otlptracegrpc.WithHeaders(honeycombHeaders),
+	)
+
+	ctx := context.Background()
+
+	// TOOD: should this actually be a otlptracegrpc.New() ?
+	traceExporter, err := otlptrace.New(ctx, grpcTraceClient)
+	if err != nil {
+		log.Fatalf("failed to create otel trace exporter: %v", err)
+	}
+
 	resource, err := resource.Merge(
 		resource.Default(),
 		resource.NewWithAttributes(
@@ -72,32 +91,28 @@ func main() {
 		log.Fatalf("failed to create otel resource: %v", err)
 	}
 
-	// create an otel tracer provider
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(traceExporter),
 		sdktrace.WithResource(resource),
 	)
 
 	defer func() {
-		_ = tracerProvider.Shutdown(ctx)
+		err := tracerProvider.Shutdown(ctx)
+		if err != nil {
+			log.Fatalf("failed shutting down the otel tracer provider: %v", err)
+		}
 	}()
 
-	// register the tracer provider as the global tracer provider
+	// register the global tracer provider
 	otel.SetTracerProvider(tracerProvider)
 
-	// (!!!) this was super important... but I don't understand why the default propagator doesn't automatically work?
-	// otel.SetTextMapPropagator(
-	// 	propagation.NewCompositeTextMapPropagator(
-	// 		propagation.TraceContext{},
-	// 		propagation.Baggage{},
-	// 	),
-	// )
-
-	// sets the global TextMapPropagator for the OpenTelemetry SDK to the W3C Trace Context format
-	// this ensures that the SDK will propagate trace context information
-	// using the standardized W3C Trace Context headers (traceparent, tracestate)
-	// when sending or receiving requests
-	otel.SetTextMapPropagator(propagation.TraceContext{})
+	// register the W3C trace context and baggage propagators so data is propagated across services/processes
+	otel.SetTextMapPropagator(
+		propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		),
+	)
 
 	// create a tracer
 	// tracer := otel.Tracer("server-" + *serverID + "-tracer")
