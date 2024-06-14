@@ -48,9 +48,9 @@ func main() {
 
 	// ---------- OTEL SETUP START ---------
 
-	grpcTraceClient := otlptracegrpc.NewClient()
-
 	ctx := context.Background()
+
+	grpcTraceClient := otlptracegrpc.NewClient()
 
 	traceExporter, err := otlptrace.New(ctx, grpcTraceClient)
 	if err != nil {
@@ -106,7 +106,7 @@ func main() {
 
 	ctx = context.Background()
 
-	// create a new span
+	// create a new root span
 	ctx, rootSpan := tracer.Start(ctx, "client-"+*clientID+"-root-span")
 	defer rootSpan.End()
 	// log.Printf("🔍 Client%s | rootSpan : %v", *clientID, rootSpan)

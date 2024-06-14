@@ -53,9 +53,9 @@ func main() {
 
 	// ---------- OTEL SETUP START ---------
 
-	grpcTraceClient := otlptracegrpc.NewClient()
-
 	ctx := context.Background()
+
+	grpcTraceClient := otlptracegrpc.NewClient()
 
 	traceExporter, err := otlptrace.New(ctx, grpcTraceClient)
 	if err != nil {
