@@ -220,11 +220,12 @@ func (s *MyServiceServer) ProcessData(ctx context.Context, request *pb.ProcessDa
 	var randomDelayToAdd int
 
 	switch *serverID {
-	// emulate that server 3 has a problem that causes it to process data much slower than the other servers
-	// case "3":
-	// 	randomDelayToAdd = 100
+	// emulate that server 3 has a problem
+	// that causes it to process data
+	// much slower than the other servers
+	case "3":
+		randomDelayToAdd = 100
 	default:
-		// randomDelayToAdd = rand.Intn(10) + 1
 		randomDelayToAdd = rand.Intn(5) + 1
 	}
 
